@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoQR — Шифрование текста</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap');
+
+  :root {
+    --bg: #090c10;
+    --panel: #0e1318;
+    --border: #1e2d3d;
+    --accent: #00e5ff;
+    --accent2: #ff3c6f;
+    --accent3: #a78bfa;
+    --text: #c8d8e8;
+    --dim: #4a6070;
+    --glow: 0 0 18px rgba(0,229,255,0.35);
+    --glow2: 0 0 18px rgba(255,60,111,0.35);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Exo 2', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 80px;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,229,255,0.06) 0%, transparent 70%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(30,45,61,0.4) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(30,45,61,0.4) 40px);
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 36px;
+    animation: fadeDown 0.7s ease both;
+  }
+  header .logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(28px, 6vw, 46px);
+    letter-spacing: 6px;
+    color: var(--accent);
+    text-shadow: var(--glow);
+    display: inline-block;
+  }
+  header .logo::before { content: '['; color: var(--accent2); margin-right: 4px; text-shadow: var(--glow2); }
+  header .logo::after  { content: ']'; color: var(--accent2); margin-left: 4px;  text-shadow: var(--glow2); }
+  header .sub { font-size: 12px; letter-spacing: 4px; color: var(--dim); margin-top: 6px; text-transform: uppercase; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 28px;
+    animation: fadeDown 0.7s 0.1s ease both;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--dim);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.25s;
+    white-space: nowrap;
+  }
+  .tab-btn.active { background: var(--border); color: var(--accent); text-shadow: var(--glow); }
+  .tab-btn.settings-tab.active { color: var(--accent3); text-shadow: 0 0 18px rgba(167,139,250,0.4); }
+  .tab-btn:not(.active):hover { color: var(--text); }
+
+  /* CARD */
+  .card {
+    width: 100%;
+    max-width: 640px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    animation: fadeUp 0.6s 0.15s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+  .card.settings-card::before {
+    background: linear-gradient(90deg, transparent, var(--accent3), transparent);
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    margin-top: 20px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  textarea, input[type="text"], input[type="password"] {
+    width: 100%;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    resize: vertical;
+  }
+  textarea { min-height: 100px; }
+  textarea:focus, input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,229,255,0.12);
+  }
+
+  .pw-wrap { position: relative; }
+  .pw-wrap input { padding-right: 44px; }
+  .eye-btn {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--dim); cursor: pointer;
+    font-size: 16px; line-height: 1; transition: color 0.2s;
+  }
+  .eye-btn:hover { color: var(--accent); }
+
+  .strength-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .strength-fill { height: 100%; width: 0%; border-radius: 2px; transition: width 0.3s, background 0.3s; }
+
+  /* Saved password banner */
+  .pw-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: rgba(167,139,250,0.08);
+    border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 7px;
+    padding: 10px 14px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--accent3);
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .pw-banner.visible { display: flex; }
+  .pw-banner .pw-dots { letter-spacing: 4px; font-size: 16px; flex: 1; }
+  .pw-banner .change-link {
+    background: none; border: none;
+    color: var(--dim); font-size: 11px;
+    cursor: pointer; font-family: 'Exo 2', sans-serif;
+    letter-spacing: 1px; text-transform: uppercase;
+    transition: color 0.2s; white-space: nowrap;
+  }
+  .pw-banner .change-link:hover { color: var(--accent3); }
+
+  .btn-row { display: flex; gap: 12px; margin-top: 24px; }
+  .btn {
+    flex: 1; padding: 13px; border: none; border-radius: 8px;
+    font-family: 'Exo 2', sans-serif; font-size: 13px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+    transition: all 0.2s; position: relative; overflow: hidden;
+  }
+  .btn-primary { background: var(--accent); color: #000; box-shadow: 0 0 20px rgba(0,229,255,0.25); }
+  .btn-primary:hover { box-shadow: 0 0 30px rgba(0,229,255,0.45); transform: translateY(-1px); }
+  .btn-secondary { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--text); }
+  .btn-purple { background: var(--accent3); color: #000; box-shadow: 0 0 20px rgba(167,139,250,0.25); }
+  .btn-purple:hover { box-shadow: 0 0 30px rgba(167,139,250,0.45); transform: translateY(-1px); }
+
+  /* OUTPUT */
+  .output-section { margin-top: 28px; display: none; animation: fadeUp 0.4s ease both; }
+  .output-section.show { display: block; }
+  .output-box {
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border);
+    border-radius: 7px; padding: 14px;
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    color: var(--accent); word-break: break-all; line-height: 1.7;
+    max-height: 120px; overflow-y: auto; position: relative;
+  }
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--border); border: none; color: var(--text);
+    padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    cursor: pointer; font-family: 'Exo 2', sans-serif; letter-spacing: 1px; transition: all 0.2s;
+  }
+  .copy-btn:hover { background: var(--accent); color: #000; }
+
+  .qr-wrap { display: flex; justify-content: center; margin-top: 20px; }
+  #qr-container {
+    padding: 16px; background: #fff; border-radius: 10px;
+    box-shadow: 0 0 30px rgba(0,229,255,0.2); display: inline-block;
+  }
+  #qr-container canvas, #qr-container img { display: block; }
+
+  .qr-actions { display: flex; gap: 12px; margin-top: 16px; justify-content: center; }
+  .qr-btn {
+    padding: 9px 20px; border-radius: 7px; border: 1px solid var(--border);
+    background: transparent; color: var(--text);
+    font-family: 'Exo 2', sans-serif; font-size: 12px; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+  }
+  .qr-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* SETTINGS */
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0; border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; font-weight: 600; color: var(--text); }
+  .setting-desc { font-size: 11px; color: var(--dim); margin-top: 3px; letter-spacing: 1px; }
+
+  .saved-pw-display {
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 14px 16px;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .saved-pw-display .lock-icon { font-size: 20px; }
+  .saved-pw-display .pw-info { flex: 1; }
+  .saved-pw-display .pw-label { font-size: 11px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; }
+  .saved-pw-display .pw-val { font-family: 'Share Tech Mono', monospace; font-size: 18px; color: var(--accent3); letter-spacing: 6px; margin-top: 4px; }
+  .saved-pw-display .pw-none { font-size: 13px; color: var(--dim); font-style: italic; margin-top: 4px; }
+
+  .algo-badge {
+    display: inline-block; font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--accent2);
+    border: 1px solid rgba(255,60,111,0.3); border-radius: 4px;
+    padding: 2px 8px; letter-spacing: 2px; margin-left: 10px; vertical-align: middle;
+  }
+
+  .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+  .success-flash {
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 7px;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--accent);
+    margin-top: 16px;
+    display: none;
+    animation: fadeUp 0.3s ease both;
+  }
+  .success-flash.show { display: block; }
+
+  .toast {
+    position: fixed; bottom: 28px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--accent); color: #000;
+    padding: 10px 24px; border-radius: 24px;
+    font-weight: 700; font-size: 13px; letter-spacing: 1px;
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    pointer-events: none; white-space: nowrap; z-index: 999;
+  }
+  .toast.error { background: var(--accent2); }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+
+  /* SCAN BUTTONS */
+  .scan-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .scan-btn {
+    flex: 1;
+    padding: 11px 10px;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    background: rgba(0,229,255,0.04);
+    color: var(--accent);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .scan-btn:hover { background: rgba(0,229,255,0.1); border-color: var(--accent); }
+
+  /* Camera scanner overlay */
+  .camera-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 1000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+  .camera-overlay.active { display: flex; }
+  .camera-overlay video {
+    width: min(360px, 90vw);
+    height: min(360px, 90vw);
+    object-fit: cover;
+    border-radius: 16px;
+    border: 2px solid var(--accent);
+    box-shadow: var(--glow);
+  }
+  .scan-frame {
+    position: absolute;
+    width: min(360px, 90vw);
+    height: min(360px, 90vw);
+    pointer-events: none;
+  }
+  .scan-line {
+    position: absolute;
+    left: 10%; right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scanMove 2s ease-in-out infinite;
+    box-shadow: var(--glow);
+  }
+  @keyframes scanMove {
+    0%   { top: 10%; }
+    50%  { top: 85%; }
+    100% { top: 10%; }
+  }
+  .camera-hint {
+    color: var(--dim);
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+  .camera-close {
+    padding: 12px 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent2);
+    font-family: 'Exo 2', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .camera-close:hover { background: rgba(255,60,111,0.1); border-color: var(--accent2); }
+
+
+  /* OCR overlay */
+  .ocr-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 1001;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+  }
+  .ocr-overlay.active { display: flex; }
+  .ocr-overlay video {
+    width: min(360px, 90vw);
+    height: min(360px, 90vw);
+    object-fit: cover;
+    border-radius: 16px;
+    border: 2px solid var(--accent3);
+    box-shadow: 0 0 18px rgba(167,139,250,0.4);
+  }
+  .ocr-progress {
+    color: var(--accent3);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-align: center;
+    min-height: 20px;
+  }
+  .ocr-snap-btn {
+    padding: 13px 36px;
+    border-radius: 50px;
+    border: none;
+    background: var(--accent3);
+    color: #000;
+    font-family: 'Exo 2', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 20px rgba(167,139,250,0.35);
+  }
+  .ocr-snap-btn:hover { transform: scale(1.05); }
+  .ocr-snap-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(14px);  } to { opacity:1; transform:translateY(0); } }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CRYPTOQR</div>
+  <div class="sub">Шифрование · AES-256-GCM · QR-код</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('encrypt')">🔒 Зашифровать</button>
+  <button class="tab-btn" onclick="switchTab('decrypt')">🔓 Расшифровать</button>
+  <button class="tab-btn settings-tab" onclick="switchTab('settings')">⚙ Пароль</button>
+</div>
+
+<!-- ENCRYPT -->
+<div class="card" id="tab-encrypt">
+  <label>Текст для шифрования</label>
+  <div class="scan-row">
+    <button class="scan-btn" style="border-color:rgba(167,139,250,0.4);color:var(--accent3)" onclick="openOCRCamera()">📷 Фото текста</button>
+    <button class="scan-btn" style="border-color:rgba(167,139,250,0.4);color:var(--accent3)" onclick="document.getElementById('ocr-file-input').click()">🖼 Фото из галереи</button>
+  </div>
+  <input type="file" id="ocr-file-input" accept="image/*" style="display:none" onchange="readTextFromFile(this)">
+  <textarea id="enc-text" placeholder="Введите текст или распознайте с фото..."></textarea>
+
+  <label>Пароль <span class="algo-badge">AES-256-GCM</span></label>
+  <div class="pw-banner" id="enc-pw-banner">
+    <span>🔑</span>
+    <span class="pw-dots" id="enc-pw-dots">••••••••</span>
+    <button class="change-link" onclick="switchTab('settings')">Сменить</button>
+  </div>
+  <div id="enc-pw-manual" style="display:none">
+    <div class="pw-wrap">
+      <input type="password" id="enc-pass" placeholder="Введите пароль вручную" oninput="checkStrength(this.value)">
+      <button class="eye-btn" onclick="toggleEye('enc-pass', this)">👁</button>
+    </div>
+    <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="encrypt()">Зашифровать и создать QR</button>
+    <button class="btn btn-secondary" onclick="clearEnc()">Очистить</button>
+  </div>
+
+  <div class="output-section" id="enc-output">
+    <div class="divider"></div>
+    <label>Зашифрованные данные (Base64)</label>
+    <div style="position:relative">
+      <div class="output-box" id="enc-result"></div>
+      <button class="copy-btn" onclick="copyText('enc-result')">COPY</button>
+    </div>
+    <label style="margin-top:24px">QR-код</label>
+    <div class="qr-wrap"><div id="qr-container"></div></div>
+    <div class="qr-actions">
+      <button class="qr-btn" onclick="downloadQR()">⬇ Скачать QR</button>
+      <button class="qr-btn" onclick="copyText('enc-result')">📋 Скопировать текст</button>
+    </div>
+  </div>
+</div>
+
+<!-- DECRYPT -->
+<div class="card" id="tab-decrypt" style="display:none">
+  <label>Зашифрованные данные (Base64 или текст из QR)</label>
+  <div class="scan-row">
+    <button class="scan-btn" onclick="openCamera()">📷 Сканировать QR</button>
+    <button class="scan-btn" onclick="document.getElementById('qr-file-input').click()">🖼 Фото из галереи</button>
+  </div>
+  <input type="file" id="qr-file-input" accept="image/*" style="display:none" onchange="readQRFromFile(this)">
+  <textarea id="dec-text" placeholder="Вставьте зашифрованную строку или отсканируйте QR..."></textarea>
+
+  <label>Пароль</label>
+  <div class="pw-banner" id="dec-pw-banner">
+    <span>🔑</span>
+    <span class="pw-dots" id="dec-pw-dots">••••••••</span>
+    <button class="change-link" onclick="switchTab('settings')">Сменить</button>
+  </div>
+  <div id="dec-pw-manual" style="display:none">
+    <div class="pw-wrap">
+      <input type="password" id="dec-pass" placeholder="Введите пароль вручную">
+      <button class="eye-btn" onclick="toggleEye('dec-pass', this)">👁</button>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="decrypt()">Расшифровать</button>
+    <button class="btn btn-secondary" onclick="clearDec()">Очистить</button>
+  </div>
+
+  <div class="output-section" id="dec-output">
+    <div class="divider"></div>
+    <label>Расшифрованный текст</label>
+    <div style="position:relative">
+      <div class="output-box" id="dec-result" style="color:#a8ffb0;max-height:200px;"></div>
+      <button class="copy-btn" onclick="copyText('dec-result')">COPY</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="card settings-card" id="tab-settings" style="display:none">
+  <div class="setting-row" style="border-bottom:none;padding-bottom:0;flex-direction:column;align-items:flex-start;gap:16px">
+    <div>
+      <div class="setting-label">Сохранённый пароль</div>
+      <div class="setting-desc">Используется автоматически при шифровании и расшифровке</div>
+    </div>
+
+    <div class="saved-pw-display" id="pw-display" style="width:100%">
+      <span class="lock-icon">🔐</span>
+      <div class="pw-info">
+        <div class="pw-label">Текущий пароль</div>
+        <div class="pw-val" id="pw-display-dots">••••••••</div>
+        <div class="pw-none" id="pw-display-none" style="display:none">Пароль не задан</div>
+      </div>
+      <button class="eye-btn" style="position:static;transform:none" onclick="toggleSavedPwView(this)">👁</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <label id="old-pass-label">Старый пароль</label>
+  <div class="pw-wrap" id="old-pass-wrap">
+    <input type="password" id="old-pass" placeholder="Введите текущий пароль">
+    <button class="eye-btn" onclick="toggleEye('old-pass', this)">👁</button>
+  </div>
+
+  <label>Новый пароль</label>
+  <div class="pw-wrap">
+    <input type="password" id="new-pass" placeholder="Введите новый пароль" oninput="checkStrength2(this.value)">
+    <button class="eye-btn" onclick="toggleEye('new-pass', this)">👁</button>
+  </div>
+  <div class="strength-bar"><div class="strength-fill" id="strength-fill2"></div></div>
+
+  <label>Подтвердите новый пароль</label>
+  <div class="pw-wrap">
+    <input type="password" id="confirm-pass" placeholder="Повторите новый пароль">
+    <button class="eye-btn" onclick="toggleEye('confirm-pass', this)">👁</button>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-purple" onclick="savePassword()">Сменить пароль</button>
+    <button class="btn btn-secondary" onclick="clearPassword()">Удалить пароль</button>
+  </div>
+
+  <div class="success-flash" id="save-success">✓ Пароль изменён — используется для всех операций</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Storage ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'cryptoqr_saved_pw';
+
+function getSavedPassword() {
+  try { return localStorage.getItem(STORAGE_KEY) || ''; } catch { return ''; }
+}
+function setSavedPassword(pw) {
+  try { localStorage.setItem(STORAGE_KEY, pw); } catch {}
+}
+function deleteSavedPassword() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+// ─── AES-256-GCM ──────────────────────────────────────────────────────────
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const mat = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
+    mat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+async function encryptText(plaintext, password) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+  const buf  = new Uint8Array(16 + 12 + ct.byteLength);
+  buf.set(salt, 0); buf.set(iv, 16); buf.set(new Uint8Array(ct), 28);
+  return btoa(String.fromCharCode(...buf));
+}
+async function decryptText(b64, password) {
+  const bin  = atob(b64);
+  const buf  = new Uint8Array(bin.length).map((_, i) => bin.charCodeAt(i));
+  const key  = await deriveKey(password, buf.slice(0, 16));
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(16, 28) }, key, buf.slice(28));
+  return new TextDecoder().decode(plain);
+}
+
+// ─── QR ───────────────────────────────────────────────────────────────────
+function generateQR(text) {
+  const c = document.getElementById('qr-container');
+  c.innerHTML = '';
+  if (text.length > 2500) {
+    showToast('Текст слишком длинный для QR. Скопируйте строку.', true);
+    c.innerHTML = '<div style="color:#ff3c6f;font-size:12px;font-family:monospace;text-align:center;padding:20px;max-width:220px">⚠ Данные слишком большие для QR.<br>Используйте «Скопировать».</div>';
+    return;
+  }
+  new QRCode(c, { text, width:200, height:200, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M });
+}
+function downloadQR() {
+  const canvas = document.querySelector('#qr-container canvas');
+  const img    = document.querySelector('#qr-container img');
+  const src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+  if (!src) { showToast('QR не сгенерирован', true); return; }
+  const a = document.createElement('a'); a.href = src; a.download = 'cryptoqr.png'; a.click();
+  showToast('QR скачан!');
+}
+
+// ─── Password UI ──────────────────────────────────────────────────────────
+function refreshPasswordUI() {
+  const saved = getSavedPassword();
+  const hasPw = saved.length > 0;
+
+  // Encrypt tab
+  document.getElementById('enc-pw-banner').classList.toggle('visible', hasPw);
+  document.getElementById('enc-pw-manual').style.display = hasPw ? 'none' : 'block';
+  if (hasPw) document.getElementById('enc-pw-dots').textContent = '•'.repeat(Math.min(saved.length, 12));
+
+  // Decrypt tab
+  document.getElementById('dec-pw-banner').classList.toggle('visible', hasPw);
+  document.getElementById('dec-pw-manual').style.display = hasPw ? 'none' : 'block';
+  if (hasPw) document.getElementById('dec-pw-dots').textContent = '•'.repeat(Math.min(saved.length, 12));
+
+  // Settings tab display
+  const dotsEl = document.getElementById('pw-display-dots');
+  const noneEl = document.getElementById('pw-display-none');
+  if (hasPw) {
+    dotsEl.style.display = 'block';
+    dotsEl.textContent = '•'.repeat(Math.min(saved.length, 16));
+    dotsEl.dataset.plain = saved;
+    noneEl.style.display = 'none';
+  } else {
+    dotsEl.style.display = 'none';
+    noneEl.style.display = 'block';
+  }
+  // Show/hide old password field in settings
+  const oldWrap = document.getElementById('old-pass-wrap');
+  const oldLabel = document.getElementById('old-pass-label');
+  if (oldWrap) oldWrap.style.display = getSavedPassword() ? 'block' : 'none';
+  if (oldLabel) oldLabel.style.display = getSavedPassword() ? 'block' : 'none';
+}
+
+function toggleSavedPwView(btn) {
+  const el = document.getElementById('pw-display-dots');
+  if (!el.dataset.plain) return;
+  const showing = el.dataset.showing === '1';
+  el.textContent = showing ? '•'.repeat(Math.min(el.dataset.plain.length, 16)) : el.dataset.plain;
+  el.dataset.showing = showing ? '0' : '1';
+  btn.textContent = showing ? '👁' : '🙈';
+}
+
+function savePassword() {
+  const existing = getSavedPassword();
+  const op = document.getElementById('old-pass').value;
+  const np = document.getElementById('new-pass').value;
+  const cp = document.getElementById('confirm-pass').value;
+  if (existing) {
+    if (!op) { showToast('Введите старый пароль', true); return; }
+    if (op !== existing) { showToast('Старый пароль неверный', true); document.getElementById('old-pass').focus(); return; }
+  }
+  if (!np) { showToast('Введите новый пароль', true); return; }
+  if (np.length < 4) { showToast('Пароль слишком короткий', true); return; }
+  if (np !== cp) { showToast('Пароли не совпадают', true); return; }
+  setSavedPassword(np);
+  document.getElementById('old-pass').value = '';
+  document.getElementById('new-pass').value = '';
+  document.getElementById('confirm-pass').value = '';
+  document.getElementById('strength-fill2').style.width = '0';
+  document.getElementById('save-success').classList.add('show');
+  setTimeout(() => document.getElementById('save-success').classList.remove('show'), 3000);
+  refreshPasswordUI();
+  showToast('Пароль изменён ✓');
+}
+
+function clearPassword() {
+  if (!getSavedPassword()) { showToast('Пароль и так не задан', true); return; }
+  deleteSavedPassword();
+  refreshPasswordUI();
+  showToast('Пароль удалён');
+}
+
+function getActivePassword(manualInputId) {
+  const saved = getSavedPassword();
+  return saved || document.getElementById(manualInputId).value;
+}
+
+// ─── Encrypt / Decrypt ────────────────────────────────────────────────────
+async function encrypt() {
+  const text = document.getElementById('enc-text').value.trim();
+  const pass = getActivePassword('enc-pass');
+  if (!text) { showToast('Введите текст', true); return; }
+  if (!pass) { showToast('Задайте пароль в разделе ⚙', true); return; }
+  const btn = document.querySelector('#tab-encrypt .btn-primary');
+  btn.textContent = '⏳ Шифрование...'; btn.disabled = true;
+  try {
+    const enc = await encryptText(text, pass);
+    document.getElementById('enc-result').textContent = enc;
+    generateQR(enc);
+    document.getElementById('enc-output').classList.add('show');
+    showToast('Зашифровано! QR готов ✓');
+  } catch(e) {
+    showToast('Ошибка шифрования', true);
+  } finally {
+    btn.textContent = 'Зашифровать и создать QR'; btn.disabled = false;
+  }
+}
+
+async function decrypt() {
+  const enc  = document.getElementById('dec-text').value.trim();
+  const pass = getActivePassword('dec-pass');
+  if (!enc)  { showToast('Вставьте зашифрованную строку', true); return; }
+  if (!pass) { showToast('Задайте пароль в разделе ⚙', true); return; }
+  const btn = document.querySelector('#tab-decrypt .btn-primary');
+  btn.textContent = '⏳ Расшифровка...'; btn.disabled = true;
+  try {
+    const plain = await decryptText(enc, pass);
+    document.getElementById('dec-result').textContent = plain;
+    document.getElementById('dec-output').classList.add('show');
+    showToast('Расшифровано успешно ✓');
+  } catch(e) {
+    showToast('Неверный пароль или данные повреждены', true);
+  } finally {
+    btn.textContent = 'Расшифровать'; btn.disabled = false;
+  }
+}
+
+function clearEnc() {
+  document.getElementById('enc-text').value = '';
+  document.getElementById('enc-pass').value = '';
+  document.getElementById('enc-output').classList.remove('show');
+  document.getElementById('strength-fill').style.width = '0';
+}
+function clearDec() {
+  document.getElementById('dec-text').value = '';
+  document.getElementById('dec-pass').value = '';
+  document.getElementById('dec-output').classList.remove('show');
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['encrypt','decrypt','settings'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    const tabs = ['encrypt','decrypt','settings'];
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+}
+
+function toggleEye(id, btn) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'password' ? '👁' : '🙈';
+}
+
+function checkStrength(pw)  { _setStrength('strength-fill',  pw); }
+function checkStrength2(pw) { _setStrength('strength-fill2', pw); }
+function _setStrength(id, pw) {
+  let s = 0;
+  if (pw.length >= 8) s++;
+  if (pw.length >= 14) s++;
+  if (/[A-Z]/.test(pw)) s++;
+  if (/[0-9]/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  const el = document.getElementById(id);
+  el.style.width = (s/5*100) + '%';
+  el.style.background = ['#ff3c6f','#ff7c3c','#ffd23c','#7cff5a','#00e5ff'][s-1] || '#1e2d3d';
+}
+
+function copyText(id) {
+  navigator.clipboard.writeText(document.getElementById(id).textContent)
+    .then(() => showToast('Скопировано!'))
+    .catch(() => showToast('Ошибка копирования', true));
+}
+
+let toastTimer;
+function showToast(msg, error=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (error ? ' error' : '') + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+refreshPasswordUI();
+
+// ─── QR Scanner (Camera) ──────────────────────────────────────────────────
+let cameraStream = null;
+let scanInterval = null;
+
+async function openCamera() {
+  const overlay = document.getElementById('camera-overlay');
+  const video   = document.getElementById('camera-video');
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 1280 } }
+    });
+    video.srcObject = cameraStream;
+    overlay.classList.add('active');
+    scanInterval = setInterval(() => scanFrame(video), 200);
+  } catch(e) {
+    showToast('Нет доступа к камере', true);
+  }
+}
+
+function closeCamera() {
+  clearInterval(scanInterval);
+  if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+  cameraStream = null;
+  document.getElementById('camera-overlay').classList.remove('active');
+  document.getElementById('camera-video').srcObject = null;
+}
+
+function scanFrame(video) {
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+  const canvas = document.getElementById('camera-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+  if (code && code.data) {
+    document.getElementById('dec-text').value = code.data;
+    closeCamera();
+    showToast('QR отсканирован ✓');
+    switchTab('decrypt');
+  }
+}
+
+// ─── QR from image file ────────────────────────────────────────────────────
+function readQRFromFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+      if (code && code.data) {
+        document.getElementById('dec-text').value = code.data;
+        showToast('QR прочитан из фото ✓');
+      } else {
+        showToast('QR-код не найден на фото', true);
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = ''; // reset so same file can be reloaded
+}
+
+
+// ─── OCR (Tesseract.js) ───────────────────────────────────────────────────
+let ocrStream = null;
+
+async function openOCRCamera() {
+  const overlay = document.getElementById('ocr-overlay');
+  const video   = document.getElementById('ocr-video');
+  try {
+    ocrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+    });
+    video.srcObject = ocrStream;
+    overlay.classList.add('active');
+    document.getElementById('ocr-progress').textContent = 'Наведите камеру на текст';
+    document.getElementById('ocr-snap-btn').disabled = false;
+  } catch(e) {
+    showToast('Нет доступа к камере', true);
+  }
+}
+
+function closeOCRCamera() {
+  if (ocrStream) ocrStream.getTracks().forEach(t => t.stop());
+  ocrStream = null;
+  document.getElementById('ocr-overlay').classList.remove('active');
+  document.getElementById('ocr-video').srcObject = null;
+}
+
+async function snapAndRecognize() {
+  const video  = document.getElementById('ocr-video');
+  const canvas = document.getElementById('ocr-canvas');
+  const btn    = document.getElementById('ocr-snap-btn');
+  const prog   = document.getElementById('ocr-progress');
+
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  btn.disabled = true;
+  prog.textContent = '⏳ Распознаю текст...';
+
+  try {
+    const result = await Tesseract.recognize(canvas, 'rus+eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          prog.textContent = '⏳ ' + Math.round(m.progress * 100) + '%';
+        }
+      }
+    });
+    const text = result.data.text.trim();
+    if (text) {
+      document.getElementById('enc-text').value =
+        (document.getElementById('enc-text').value ? document.getElementById('enc-text').value + '\n' : '') + text;
+      closeOCRCamera();
+      showToast('Текст распознан ✓');
+    } else {
+      prog.textContent = '⚠ Текст не найден — попробуйте ещё раз';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    prog.textContent = '⚠ Ошибка распознавания';
+    btn.disabled = false;
+  }
+}
+
+async function readTextFromFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('Распознаю текст...');
+  try {
+    const result = await Tesseract.recognize(file, 'rus+eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          showToast('Распознаю ' + Math.round(m.progress * 100) + '%...');
+        }
+      }
+    });
+    const text = result.data.text.trim();
+    if (text) {
+      document.getElementById('enc-text').value =
+        (document.getElementById('enc-text').value ? document.getElementById('enc-text').value + '\n' : '') + text;
+      showToast('Текст распознан ✓');
+    } else {
+      showToast('Текст не найден на фото', true);
+    }
+  } catch(e) {
+    showToast('Ошибка распознавания', true);
+  }
+  input.value = '';
+}
+
+</script>
+
+<!-- Camera overlay -->
+<div class="camera-overlay" id="camera-overlay">
+  <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+    <video id="camera-video" autoplay playsinline muted></video>
+    <canvas id="camera-canvas" style="display:none"></canvas>
+    <div class="scan-frame"><div class="scan-line"></div></div>
+  </div>
+  <div class="camera-hint">Наведите камеру на QR-код</div>
+  <button class="camera-close" onclick="closeCamera()">✕ Закрыть</button>
+</div>
+
+
+<!-- OCR Camera overlay -->
+<div class="ocr-overlay" id="ocr-overlay">
+  <div style="color:var(--accent3);font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:3px">📝 РАСПОЗНАВАНИЕ ТЕКСТА</div>
+  <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+    <video id="ocr-video" autoplay playsinline muted></video>
+    <canvas id="ocr-canvas" style="display:none"></canvas>
+  </div>
+  <div class="ocr-progress" id="ocr-progress">Наведите камеру на текст</div>
+  <button class="ocr-snap-btn" id="ocr-snap-btn" onclick="snapAndRecognize()">📸 Сфотографировать</button>
+  <button class="camera-close" onclick="closeOCRCamera()">✕ Закрыть</button>
+</div>
+
+</body>
+</html>
